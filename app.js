@@ -1,3 +1,4 @@
+// =======================
 //      1. DEPENDENCIAS Y MÓDULOS
 // =======================
 
@@ -7,15 +8,18 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 
-// Módulos de Terceros
+// Módulos de Terceros (DB/Auth)
 const { PrismaClient } = require('@prisma/client');
 const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 // Módulos Locales / Middlewares
 const loggerMiddleware = require('./middlewares/logger');
-const errorHandler = require('./middlewares/errorHandler');
-const { validateUserData } = require('./Utils/validation');
-const authenticateToken = require('./middlewares/auth')
+const errorHandler = require('./middlewares/errorHandler'); // Manejo de errores 500
+const { validateUserData } = require('./Utils/validation'); // Validación de datos de usuario
+const authenticateToken = require('./middlewares/auth'); // Middleware de protección de rutas
+
 
 // =======================
 //      2. CONFIGURACIÓN INICIAL
@@ -29,12 +33,13 @@ const userFilePath = path.join(__dirname, 'users.json');
 // =======================
 //      3. MIDDLEWARES GLOBALES
 // =======================
-// a) Body Parsers (Siempre van primero para leer la solicitud)
+// a) Body Parsers (Siempre van primero para leer el cuerpo JSON)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // b) Logger (Para registrar la solicitud entrante)
 app.use(loggerMiddleware); 
+
 
 // =======================
 //      4. FUNCIONES DE UTILIDAD
@@ -64,20 +69,93 @@ const serializeBigInt = (data) => {
 };
 
 // =======================
-//      5. RUTAS
+//      5. RUTAS DE AUTENTICACIÓN Y DB
 // =======================
 
-// Ruta raíz
-app.get('/', (req, res) => {
-  res.send(`<h1>Servidor Express.js</h1><p>Servidor escuchando peticiones.</p>`);
+// POST /register -> Registra un nuevo usuario en PostgreSQL
+app.post('/register', async (req, res) => {
+  const { email, password, name, phone } = req.body;
+  
+  if (!email || !password || !name || !phone) {
+    return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+  }
+
+  try {
+    // Verificación de unicidad antes de la creación
+    const existingUser = await prisma.user.findFirst({
+      where: { OR: [{ email }, { phone }] },
+    });
+
+    if (existingUser) {
+      if (existingUser.email === email) {
+        return res.status(409).json({ error: 'El correo electrónico ya está registrado.' });
+      }
+      if (existingUser.phone === phone) {
+        return res.status(409).json({ error: 'El número de teléfono ya está registrado.' });
+      }
+    }
+
+    // Hashing de la contraseña y generación de ID numérico
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const numericId = BigInt(Date.now());
+    
+    // Creación del nuevo usuario en la base de datos
+    const newUser = await prisma.user.create({
+      data: {
+        numericId: numericId, 
+        name: name,
+        email: email,
+        phone: phone, 
+        password: hashedPassword,
+        role: 'USER', // Rol por defecto
+      },
+      select: { // Retornar solo campos seguros
+        uuid: true,
+        numericId: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+    });
+
+    // Aplicar la serialización de BigInt
+    const serializedUser = serializeBigInt(newUser); 
+    
+    res.status(201).json({ message: 'Usuario registrado con éxito', user: serializedUser });
+
+  } catch (error) {
+    console.error("Error al registrar usuario:", error);
+    
+    if (error.code === 'P2002') { // Error de unicidad de Prisma
+        return res.status(409).json({ error: 'Error de unicidad: El email o teléfono ya existen.' });
+    }
+    
+    res.status(500).json({ error: 'Error interno del servidor.' });
+  }
 });
 
-// GET /db-users -> Obtiene todos los usuarios de PostgreSQL usando Prisma
+// POST - LOGIN de usuarios en DB 
+app.post('/login', async (req, res) => {
+  const {email, password} = req.body;
+  const user = await prisma.user.findUnique({where: {email}});
+
+  if (!user) return res.status(400).json({ error: 'invalid email or password'});
+
+  const validPassword = await bcrypt.compare(password, user.password);
+
+  if(!validPassword) return res.status(400).json({ error: 'invalid email or password'});
+
+  const token = jwt.sign({ id: user.id, role: user.role}, process.env.JWT_SECRET, { expiresIn: '4h'});
+
+  res.json({ token });
+});
+
+// GET /db-users -> Obtiene todos los usuarios de PostgreSQL
 app.get('/db-users', async (req, res) => {
   try {
     const users = await prisma.user.findMany();
     
-    // Serializa BigInt a String para que Express pueda enviar el JSON
+    // Serializa BigInt
     const serializedUsers = serializeBigInt(users); 
     
     res.json(serializedUsers);
@@ -87,6 +165,21 @@ app.get('/db-users', async (req, res) => {
   }
 });
 
+// GET /protected-route -> Ruta de prueba protegida por JWT
+app.get('/protected-route', authenticateToken, (req, res) => {
+  // El token es válido si llegamos aquí
+  res.send(`Esta es una ruta protegida. Usuario: ${req.user.email}`);
+});
+
+
+// =======================
+//      6. RUTAS ANTIGUAS (JSON)
+// =======================
+
+// Ruta raíz
+app.get('/', (req, res) => {
+  res.send(`<h1>Servidor Express.js</h1><p>Servidor escuchando peticiones.</p>`);
+});
 
 // POST /users -> Crea un usuario y lo guarda en el archivo JSON
 app.post('/users', (req, res) => {
@@ -193,17 +286,14 @@ app.delete('/users/:id', (req, res) => {
 });
 
 
+
 // =======================
-//      6. MANEJO DE ERRORES (EL ÚLTIMO MIDDLEWARE)
+//      7. MANEJO DE ERRORES (EL ÚLTIMO MIDDLEWARE)
 // =======================
 app.use(errorHandler);
 
-app.get('/protected-route', authenticateToken, (req, res) => {
-  res.send('Esta es una ruta protegida')
-});
-
 // =======================
-//      7. SERVIDOR
+//      8. SERVIDOR
 // =======================
 app.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
