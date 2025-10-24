@@ -8,10 +8,27 @@
   "type": "MIT",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node --watch app.js",
+    "start": "node app.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "generate-prisma": "dotenv -e .env -- prisma generate",
+    "seed": "npm run generate-prisma && dotenv -e .env -- prisma db seed"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "@prisma/client": "^6.18.0",
+    "bcryptjs": "^3.0.2",
+    "body-parser": "^2.2.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.16.3",
+    "uuid": "^13.0.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "dotenv-cli": "^10.0.0",
+    "prisma": "^6.18.0"
+  }
 }

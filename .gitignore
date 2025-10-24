@@ -30,7 +30,7 @@ coverage
 # nyc test coverage
 .nyc_output
 
-# Grunt intermediate storage (https://gruntjs.com/creating-plugins#storing-task-files)
+# Grunt intermediate storage (https://gruntjs.org/creating-plugins#storing-task-files)
 .grunt
 
 # Bower dependency directory (https://bower.io/)
@@ -81,6 +81,8 @@ web_modules/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.local
+# Agregamos esta línea para ignorar la clave de encriptación de Prisma Data Proxy
 .env.local
 
 # parcel-bundler cache (https://parceljs.org/)
@@ -142,3 +144,14 @@ dist
 .svelte-kit
 
 # End of https://www.toptal.com/developers/gitignore/api/node
+
+### Prisma Specific ###
+# Directorio donde se guardan los "engines" o binarios de Prisma (son grandes y específicos de la arquitectura)
+prisma/
+# Nota: La carpeta `migrations` se debe incluir si no quieres guardar el historial de la base de datos en Git.
+# Sin embargo, generalmente SÍ quieres guardar las migraciones (`prisma/migrations`) para el despliegue.
+# Si quieres ignorar el historial de desarrollo de Prisma, ignora el directorio completo
+# prisma/migrations
+
+# Archivo de SQLite (si se usa)
+*.db
