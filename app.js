@@ -15,10 +15,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 // Módulos Locales / Middlewares
-const loggerMiddleware = require('./middlewares/logger');
-const errorHandler = require('./middlewares/errorHandler'); // Manejo de errores 500
-const { validateUserData } = require('./Utils/validation'); // Validación de datos de usuario
-const authenticateToken = require('./middlewares/auth'); // Middleware de protección de rutas
+const loggerMiddleware = require('./src/middlewares/logger');
+const errorHandler = require('./src/middlewares/errorHandler'); // Manejo de errores 500
+const { validateUserData } = require('./src/Utils/validation'); // Validación de datos de usuario
+const authenticateToken = require('./src/middlewares/auth'); // Middleware de protección de rutas
 
 
 // =======================
